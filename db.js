@@ -3,12 +3,12 @@
   var slice$ = [].slice;
   this.__DB__ = null;
   this.include = function(){
-    var env, ref$, redisPort, redisHost, redisPass, dataDir, services, name, items, ref1$, redis, makeClient, RedisStore, db, EXPIRE, this$ = this;
+    var env, ref$, redisPort, redisHost, redisPass, redisDb, dataDir, services, name, items, ref1$, redis, makeClient, RedisStore, db, EXPIRE, this$ = this;
     if (this.__DB__) {
       return this.__DB__;
     }
     env = process.env;
-    ref$ = [env['REDIS_PORT'], env['REDIS_HOST'], env['REDIS_PASS'], env['OPENSHIFT_DATA_DIR']], redisPort = ref$[0], redisHost = ref$[1], redisPass = ref$[2], dataDir = ref$[3];
+    ref$ = [env['REDIS_PORT'], env['REDIS_HOST'], env['REDIS_PASS'], env['REDIS_DB'], env['OPENSHIFT_DATA_DIR']], redisPort = ref$[0], redisHost = ref$[1], redisPass = ref$[2], redisDb = ref$[3], dataDir = ref$[4];
     services = JSON.parse(process.env.VCAP_SERVICES || '{}');
     for (name in services) {
       items = services[name];
@@ -26,6 +26,11 @@
       if (redisPass) {
         client.auth(redisPass, function(){
           return console.log.apply(console, arguments);
+        });
+      }
+      if (redisDb) {
+        client.select(redisDb, function(){
+          return console.log("Selecting Redis database " + redisDb);
         });
       }
       if (cb) {
@@ -80,10 +85,13 @@
       try {
         db.DB = JSON.parse(require('fs').readFileSync(dataDir + "/dump.json", 'utf8'));
         console.log("==> Restored previous session from JSON file");
+        if (db.DB === true) {
+          db.DB = {};
+        }
       } catch (e$) {}
       Commands = {
         bgsave: function(cb){
-          fs.writeFileSync(dataDir + "/dump.json", JSON.stringify(db.DB), 'utf8');
+          fs.writeFileSync(dataDir + "/dump.json", JSON.stringify(db.DB, void 8, 2), 'utf8');
           return typeof cb == 'function' ? cb() : void 8;
         },
         get: function(key, cb){
@@ -120,15 +128,14 @@
             : ref$[key] = {}) : void 8;
         },
         del: function(keys, cb){
-          var i$, len$, yet$, key;
+          var i$, len$, key;
           if (Array.isArray(keys)) {
-            for (yet$ = true, i$ = 0, len$ = keys.length; i$ < len$; ++i$) {
+            for (i$ = 0, len$ = keys.length; i$ < len$; ++i$) {
               key = keys[i$];
-              yet$ = false;
               delete db.DB[key];
-            } if (yet$) {
-              delete db.DB[keys];
             }
+          } else {
+            delete db.DB[keys];
           }
           return typeof cb == 'function' ? cb() : void 8;
         }

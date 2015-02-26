@@ -3,7 +3,7 @@
   return @__DB__ if @__DB__
 
   env = process.env
-  [redisPort, redisHost, redisPass, dataDir] = env<[ REDIS_PORT REDIS_HOST REDIS_PASS OPENSHIFT_DATA_DIR ]>
+  [redisPort, redisHost, redisPass, redisDb, dataDir] = env<[ REDIS_PORT REDIS_HOST REDIS_PASS REDIS_DB OPENSHIFT_DATA_DIR ]>
 
   services = JSON.parse do
     process.env.VCAP_SERVICES or '{}'
@@ -21,6 +21,8 @@
     client = redis.createClient redisPort, redisHost
     if redisPass
       client.auth redisPass, -> console.log ...arguments
+    if redisDb
+      client.select redisDb, -> console.log "Selecting Redis database #{redisDb}"
     client.on \connect cb if cb
     return client
 
@@ -61,11 +63,12 @@
       db.DB = JSON.parse do
         require \fs .readFileSync "#dataDir/dump.json" \utf8
       console.log "==> Restored previous session from JSON file"
+      db.DB = {} if db.DB is true
     Commands =
       bgsave: (cb) ->
         fs.writeFileSync do
           "#dataDir/dump.json"
-          JSON.stringify db.DB
+          JSON.stringify db.DB,,2
           \utf8
         cb?!
       get: (key, cb) -> cb?(null, db.DB[key])
@@ -75,8 +78,10 @@
       hset: (key, idx, val) -> (db.DB[key] ?= [])[idx] = val; cb?!
       hgetall: (key, cb) -> cb?(null, db.DB[key] ?= {})
       del: (keys, cb) ->
-        if Array.isArray keys   => for key in keys => delete db.DB[key]
-        else          => delete db.DB[keys]
+        if Array.isArray keys
+          for key in keys => delete! db.DB[key]
+        else
+          delete db.DB[keys]
         cb?!
     db <<<< Commands
     db.multi = (...cmds) ->

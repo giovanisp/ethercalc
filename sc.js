@@ -140,6 +140,10 @@
       if (argv.vm) {
         throw 'vm';
       }
+      if (process.platform === 'darwin' && parseInt(process.versions.node.slice(2)) > 10) {
+        console.log("Note: OS X threading with Node " + process.versions.node + " is WIP");
+        throw 'too-new';
+      }
       console.log("Starting backend using webworker-threads");
       return require('webworker-threads').Worker;
     } catch (e$) {
@@ -157,12 +161,14 @@
         console: console,
         self: {
           onmessage: function(){}
-        }
+        },
+        alert: function(){}
       };
       cxt.window = {
         setTimeout: function(cb, ms){
           return process.nextTick(cb);
         },
+        alert: function(){},
         clearTimeout: function(){}
       };
       this.postMessage = function(data){
@@ -256,7 +262,7 @@
       }
       w = new Worker(function(){
         return self.onmessage = function(arg$){
-          var ref$, type, ref, snapshot, command, room, log, ref1$, csv, ss, parts, cmdstr, line;
+          var ref$, type, ref, snapshot, command, room, log, ref1$, csv, alert, ss, parts, cmdstr, line;
           ref$ = arg$.data, type = ref$.type, ref = ref$.ref, snapshot = ref$.snapshot, command = ref$.command, room = ref$.room, log = (ref1$ = ref$.log) != null
             ? ref1$
             : [];
@@ -300,7 +306,10 @@
             SocialCalc.Popup.Types.ColorChooser.Create = function(){};
             SocialCalc.Popup.Initialize = function(){};
             SocialCalc.RecalcInfo.LoadSheet = function(ref){
-              ref = (ref + "").replace(/[^a-zA-Z0-9]+/g, '').toLowerCase();
+              if (/[^.a-zA-Z0-9]/.exec(ref)) {
+                return;
+              }
+              ref = ref.toLowerCase();
               postMessage({
                 type: 'load-sheet',
                 ref: ref
@@ -311,6 +320,7 @@
               return thread.nextTick(cb);
             };
             window.clearTimeout = function(){};
+            window.alert = alert = function(){};
             window.ss = ss = new SocialCalc.SpreadsheetControl;
             ss.SocialCalc = SocialCalc;
             ss._room = room;
